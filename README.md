@@ -19,6 +19,68 @@ El flujo actual trabaja primero con un **piloto chico de media tensión de Monte
 - JupyterLab.
 - Un entorno virtual Python recomendado en `.venv/`.
 
+## Datos no versionados
+
+El repositorio no incluye el backup original de SQL Server ni archivos derivados pesados, porque superan los límites de GitHub y no deben versionarse junto con el código del laboratorio.
+
+### Archivo obligatorio para el flujo completo
+
+Para replicar el flujo completo desde cero se necesita disponer localmente del backup recibido y ubicarlo exactamente en:
+
+```text
+sqlserver/20211020
+```
+
+Ese archivo es requerido por la notebook 01 para restaurar la base `CEML_GIS` y volver a exportar los TSV del piloto MT.
+
+### Archivos necesarios si se empieza desde exports TSV
+
+Si no se usa el backup SQL Server, se puede empezar desde exports TSV ya generados. Para el piloto MT deben ubicarse en:
+
+```text
+sqlserver/exports/
+```
+
+Archivos mínimos esperados:
+
+```text
+sqlserver/exports/tmp_shapefile.tsv
+sqlserver/exports/objetos_red.tsv
+sqlserver/exports/set.tsv
+sqlserver/exports/seccionadores.tsv
+sqlserver/exports/mt_cables.tsv
+```
+
+Con esos archivos se puede continuar desde las notebooks 05 y 06 para cargar PostGIS y generar las capas QGIS/Web.
+
+### Archivos CAD/DXF opcionales
+
+Los archivos CAD/DXF no son necesarios para publicar las capas actuales en PostGIS/QGIS/Web, porque la geometría del piloto se reconstruye desde `tmp_shapefile.tsv`.
+
+Sí son necesarios si se quiere ejecutar la notebook 03 de inspección de fuentes CAD/DXF. En ese caso, ubicarlos en:
+
+```text
+dwg/
+dxf/
+```
+
+Archivos esperados para la práctica CAD/DXF:
+
+```text
+dwg/MONTECARLO_CATASTROORIGINAL.dwg
+dwg/Montecarlo_MT.dwg
+dwg/Montecarlo_SUMINISTRO_Y_BT.dwg
+dxf/MONTECARLO_CATASTROORIGINAL.dxf
+dxf/Montecarlo_MT.dxf
+```
+
+Si no se tiene el backup original, hay dos alternativas:
+
+1. **Replicar solo desde datos ya exportados**: conseguir una copia de `sqlserver/exports/*.tsv` generada previamente y continuar desde las notebooks 02, 05 y 06.
+2. **Usar una base PostGIS ya cargada**: conseguir un dump de PostgreSQL/PostGIS del esquema `crudo`, `depuracion`, `gis` y `auditoria`, restaurarlo y continuar desde QGIS/GeoServer/Web GIS.
+
+Sin el backup SQL Server o sin exports/dump derivados, no es posible reconstruir los datos reales del laboratorio; solo se puede levantar la infraestructura vacía.
+
 Instalar dependencias:
 
 ```bash
