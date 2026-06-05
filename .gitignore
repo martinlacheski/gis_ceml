@@ -1,0 +1,41 @@
+# Entorno Python local
+.venv/
+
+# Cachés de Python/Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Datos generados por SQL Server durante las prácticas
+sqlserver/20211020
+sqlserver/data/
+sqlserver/backup/*.bak
+sqlserver/exports/
+
+# Datos generados por PostGIS durante las prácticas
+postgis/data/
+
+# Datos generados por pgAdmin durante las prácticas
+pgadmin/data/
+
+# Datos generados por GeoServer durante las prácticas
+geoserver/data/
+
+# Archivos temporales del sistema/editor
+.DS_Store
+*.swp
+*.swo
+
+# Backups y datos pesados
+backup/
+backup/sqlserver/
+backup/dxf/
+backup/raw_exports/
+
+# SQL Server
+*.mdf
+*.ldf
+
+# Archivos GIS pesados
+*.dxf
+*.geojson

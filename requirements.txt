@@ -1,0 +1,7 @@
+# Entorno local para ejecutar notebooks del laboratorio GIS.
+jupyterlab
+ipykernel
+pandas
+
+# Driver moderno para conectar notebooks Python con PostgreSQL/PostGIS.
+psycopg[binary]

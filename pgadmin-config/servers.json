@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "CEML PostGIS",
+      "Group": "Laboratorio GIS",
+      "Host": "postgis",
+      "Port": 5432,
+      "MaintenanceDB": "ceml_gis",
+      "Username": "ceml",
+      "PassFile": "/pgpass",
+      "SSLMode": "prefer"
+    }
+  }
+}

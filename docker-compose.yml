@@ -1,0 +1,88 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2019-latest
+    container_name: ceml-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Express"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:-CEML_Admin_2026!}"
+    ports:
+      - "1433:1433"
+    volumes:
+      - ./sqlserver/data:/var/opt/mssql/data
+      - ./sqlserver/backup:/var/opt/mssql/backup
+      - ./sqlserver/exports:/exports
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ -x /opt/mssql-tools18/bin/sqlcmd ]; then /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null; else /opt/mssql-tools/bin/sqlcmd -S localhost -U SA -P \"$$MSSQL_SA_PASSWORD\" -Q \"SELECT 1\" -b -o /dev/null; fi",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 25s
+
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: ceml-postgis
+    environment:
+      POSTGRES_DB: "${POSTGRES_DB:-ceml_gis}"
+      POSTGRES_USER: "${POSTGRES_USER:-ceml}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-ceml_admin_2026}"
+    ports:
+      - "5439:5432"
+    volumes:
+      - ./postgis/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  pgadmin:
+    image: dpage/pgadmin4:9.15.0
+    container_name: ceml-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "${PGADMIN_DEFAULT_EMAIL:-postgis@example.com}"
+      PGADMIN_DEFAULT_PASSWORD: "${PGADMIN_DEFAULT_PASSWORD:-ceml_admin_2026}"
+    ports:
+      - "8089:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+      - ./pgadmin-config/servers.json:/pgadmin4/servers.json:ro
+      - ./pgadmin-config/pgpass:/pgpass:ro
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+  geoserver:
+    image: kartoza/geoserver:2.26.0
+    container_name: ceml-geoserver
+    environment:
+      GEOSERVER_ADMIN_USER: "${GEOSERVER_ADMIN_USER:-admin}"
+      GEOSERVER_ADMIN_PASSWORD: "${GEOSERVER_ADMIN_PASSWORD:-geoserver}"
+      GEOSERVER_DATA_DIR: "/opt/geoserver/data_dir"
+    ports:
+      - "8088:8080"
+    volumes:
+      - geoserver-data:/opt/geoserver/data_dir
+    depends_on:
+      postgis:
+        condition: service_healthy
+
+  webgis:
+    image: nginx:1.27-alpine
+    container_name: ceml-webgis
+    ports:
+      - "8090:80"
+    volumes:
+      - ./web:/usr/share/nginx/html:ro
+      - ./web/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - geoserver
+
+volumes:
+  pgadmin-data:
+  geoserver-data:

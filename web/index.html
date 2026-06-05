@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CEML Web GIS</title>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/ol@10.3.1/ol.css"
+    />
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family:
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 18rem 1fr;
+        grid-template-rows: auto 1fr;
+        height: 100%;
+      }
+
+      header {
+        grid-column: 1 / -1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: #102033;
+        color: #fff;
+      }
+
+      header h1 {
+        margin: 0;
+        font-size: 1rem;
+      }
+
+      label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        font-size: 0.9rem;
+      }
+
+      input {
+        width: 12rem;
+        padding: 0.35rem 0.45rem;
+        border: 1px solid #cbd5e1;
+        border-radius: 0.35rem;
+      }
+
+      button {
+        padding: 0.45rem 0.7rem;
+        border: 0;
+        border-radius: 0.35rem;
+        background: #38bdf8;
+        color: #082f49;
+        cursor: pointer;
+        font-weight: 700;
+      }
+
+      #map {
+        min-height: 0;
+      }
+
+      aside {
+        padding: 1rem;
+        border-right: 1px solid #cbd5e1;
+        background: #f8fafc;
+        overflow: auto;
+      }
+
+      aside h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1rem;
+      }
+
+      .layer-list {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .layer-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .layer-item input {
+        width: auto;
+      }
+
+      .layer-help {
+        margin-top: 1rem;
+        color: #475569;
+        font-size: 0.85rem;
+        line-height: 1.35;
+      }
+
+      .hint {
+        color: #cbd5e1;
+        font-size: 0.85rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="layout">
+      <header>
+        <h1>CEML Web GIS</h1>
+        <label>
+          Workspace
+          <input id="workspace" value="CEML" />
+        </label>
+        <button id="load-layers" type="button">Actualizar capas WMS</button>
+        <span class="hint">
+          Active una o varias capas publicadas en GeoServer.
+        </span>
+      </header>
+      <aside aria-label="Control de capas">
+        <h2>Capas disponibles</h2>
+        <div id="layer-list" class="layer-list"></div>
+        <p class="layer-help">
+          Las capas deben estar publicadas en GeoServer dentro del workspace indicado.
+          Use solo el nombre de capa, por ejemplo <strong>mt_cables</strong>, no
+          <strong>CEML:mt_cables</strong>.
+        </p>
+      </aside>
+      <section id="map" aria-label="Mapa GIS"></section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@10.3.1/dist/ol.js"></script>
+    <script>
+      const osmLayer = new ol.layer.Tile({
+        source: new ol.source.OSM(),
+      });
+
+      const capasDisponibles = [
+        { nombre: "mt_cables", etiqueta: "Cables MT", activa: true },
+        { nombre: "mt_postes", etiqueta: "Postes MT", activa: true },
+        { nombre: "mt_elementos", etiqueta: "Elementos MT", activa: true },
+        { nombre: "mt_seccionadores", etiqueta: "Seccionadores MT", activa: true },
+        { nombre: "set", etiqueta: "SET", activa: true },
+      ];
+
+      const capasPostgis = new ol.layer.Image({
+        source: new ol.source.ImageWMS({
+          url: "/geoserver/CEML/wms",
+          params: {
+            LAYERS:
+              "CEML:mt_cables,CEML:mt_postes,CEML:mt_elementos,CEML:mt_seccionadores,CEML:set",
+          },
+          serverType: "geoserver",
+          ratio: 1.2,
+        }),
+        opacity: 0.9,
+      });
+
+      const map = new ol.Map({
+        target: "map",
+        layers: [osmLayer, capasPostgis],
+        view: new ol.View({
+          center: ol.proj.fromLonLat([-54.56, -26.57]),
+          zoom: 13,
+        }),
+      });
+
+      function renderizarListadoCapas() {
+        const contenedor = document.getElementById("layer-list");
+        contenedor.innerHTML = "";
+
+        for (const capa of capasDisponibles) {
+          const id = `layer-${capa.nombre}`;
+          const item = document.createElement("label");
+          item.className = "layer-item";
+          item.innerHTML = `
+            <input type="checkbox" id="${id}" value="${capa.nombre}" ${capa.activa ? "checked" : ""} />
+            <span>${capa.etiqueta}</span>
+          `;
+          contenedor.appendChild(item);
+        }
+      }
+
+      function actualizarCapas() {
+        const workspace = document.getElementById("workspace").value.trim();
+
+        if (!workspace) {
+          window.alert("Indique el workspace de GeoServer.");
+          return;
+        }
+
+        const seleccionadas = [...document.querySelectorAll("#layer-list input:checked")].map(
+          (checkbox) => checkbox.value,
+        );
+
+        if (!seleccionadas.length) {
+          capasPostgis.setVisible(false);
+          return;
+        }
+
+        capasPostgis.setVisible(true);
+        capasPostgis.setSource(
+          new ol.source.ImageWMS({
+            url: `/geoserver/${workspace}/wms`,
+            params: {
+              LAYERS: seleccionadas.map((nombre) => `${workspace}:${nombre}`).join(","),
+              _: Date.now(),
+            },
+            serverType: "geoserver",
+            ratio: 1.2,
+          }),
+        );
+      }
+
+      document.getElementById("load-layers").addEventListener("click", actualizarCapas);
+      renderizarListadoCapas();
+      actualizarCapas();
+    </script>
+  </body>
+</html>
