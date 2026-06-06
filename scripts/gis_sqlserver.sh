@@ -13,6 +13,12 @@ set -euo pipefail
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 
+# Servicios de infraestructura que necesita el laboratorio desde las notebooks.
+# Dejamos jupyter afuera a propósito: si una celda ejecuta `docker compose up -d`
+# sobre todo el proyecto, Docker puede recrear el propio contenedor Jupyter y
+# cortar el kernel donde está corriendo la clase.
+LAB_INFRA_SERVICES=(sqlserver postgis pgadmin geoserver webgis)
+
 # Si existe .env, exportamos sus variables para reutilizar la configuración
 # centralizada del laboratorio. set -a hace que las variables cargadas queden
 # disponibles para los comandos hijos que ejecuta este script.
@@ -47,6 +53,7 @@ Notas:
 - restore-auto lee los logical names del backup y ejecuta restore automáticamente
 - export-table genera archivos con encabezados; para texto libre se recomienda extensión .tsv
 - export-candidates exporta las tablas iniciales para explorar puntos, líneas, polígonos y contexto operativo
+- up/down administran solo la infraestructura del laboratorio; no recrean jupyter
 EOF
 }
 
@@ -113,12 +120,15 @@ cmd_up() {
   # Antes de levantar los contenedores preparamos los directorios bind-mounted.
   # Esto evita errores cuando Docker recrea carpetas con dueño root.
   "$BASE_DIR/scripts/prepare_docker_dirs.sh"
-  compose up -d
+  compose up -d "${LAB_INFRA_SERVICES[@]}"
   wait_ready
 }
 
 cmd_down() {
-  compose down
+  # Paramos solo la infraestructura usada por SQL/GIS y dejamos Jupyter vivo.
+  # Para apagar absolutamente todo el proyecto, usar `docker compose down`
+  # desde una terminal de la máquina anfitriona, no desde una notebook.
+  compose stop "${LAB_INFRA_SERVICES[@]}"
 }
 
 cmd_info_backup() {

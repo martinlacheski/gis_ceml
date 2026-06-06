@@ -125,7 +125,7 @@ docker compose up -d
 
 `prepare_docker_dirs.sh` crea y corrige permisos de `sqlserver/data`, `sqlserver/backup`, `sqlserver/exports` y `postgis/data` usando un contenedor Docker temporal como root. Esto evita tener que ejecutar `sudo chmod` en la máquina anfitriona cuando los bind mounts se recrean como `root:root`. El script aplica `chmod 777` solo a esos directorios generados del laboratorio local; no es un criterio para producción.
 
-Si se usa `./scripts/gis_sqlserver.sh up`, esta preparación se ejecuta automáticamente antes de `docker compose up -d`.
+Si se usa `./scripts/gis_sqlserver.sh up`, esta preparación se ejecuta automáticamente y se levantan solo los servicios de infraestructura (`sqlserver`, `postgis`, `pgadmin`, `geoserver`, `webgis`). El script no recrea `jupyter`, para no cortar kernels cuando se ejecuta desde una notebook.
 
 La primera vez que se descarga los componentes necesarios puede demorar varios minutos.
 
@@ -168,6 +168,7 @@ Importante sobre hosts:
 - Desde QGIS, pgAdmin en navegador u otras herramientas de la máquina anfitriona, mantener `localhost` y los puertos publicados en `.env`.
 - `COMPOSE_PROJECT_NAME=gis_ceml` mantiene el mismo nombre de proyecto Docker Compose dentro y fuera de Jupyter. Sin ese valor, Compose podría calcular otro nombre desde `/home/jovyan/work` y no encontrar los contenedores esperados.
 - Jupyter monta el socket Docker del host (`/var/run/docker.sock`) para que las notebooks puedan ejecutar `docker compose` y los scripts del proyecto desde el contenedor.
+- Desde una notebook no usar `docker compose up -d` ni `docker compose down` sobre todo el proyecto, porque eso incluye al propio servicio `jupyter` y puede cortar el kernel. Usar los scripts del proyecto o indicar servicios concretos.
 - Este acceso al socket Docker da permisos altos sobre Docker en la máquina anfitriona. Usarlo solo en el laboratorio local o en una red de confianza; no exponer Jupyter a internet ni a usuarios no confiables.
 
 Ver estado:
