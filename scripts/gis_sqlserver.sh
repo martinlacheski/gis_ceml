@@ -87,8 +87,7 @@ wait_ready() {
 }
 
 cmd_up() {
-  mkdir -p "$BASE_DIR/sqlserver/data" "$BASE_DIR/sqlserver/backup" "$BASE_DIR/sqlserver/exports"
-  chmod a+rwx "$BASE_DIR/sqlserver/data" "$BASE_DIR/sqlserver/backup" "$BASE_DIR/sqlserver/exports" || true
+  "$BASE_DIR/scripts/prepare_docker_dirs.sh"
   compose up -d
   wait_ready
 }

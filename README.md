@@ -119,8 +119,13 @@ Levantar SQL Server, PostGIS, pgAdmin, GeoServer y la web GIS:
 
 ```bash
 ./scripts/render_pgadmin_config.sh
+./scripts/prepare_docker_dirs.sh
 docker compose up -d
 ```
+
+`prepare_docker_dirs.sh` crea y corrige permisos de `sqlserver/data`, `sqlserver/backup`, `sqlserver/exports` y `postgis/data` usando un contenedor Docker temporal como root. Esto evita tener que ejecutar `sudo chmod` en la máquina anfitriona cuando los bind mounts se recrean como `root:root`. El script aplica `chmod 777` solo a esos directorios generados del laboratorio local; no es un criterio para producción.
+
+Si se usa `./scripts/gis_sqlserver.sh up`, esta preparación se ejecuta automáticamente antes de `docker compose up -d`.
 
 La primera vez que se descarga los componentes necesarios puede demorar varios minutos.
 
@@ -281,6 +286,7 @@ Para probar el flujo completo:
 1. Levantar servicios:
 
    ```bash
+   ./scripts/prepare_docker_dirs.sh
    docker compose up -d postgis geoserver webgis
    ```
 
@@ -536,8 +542,19 @@ python3 -m pip install -r requirements.txt
 docker compose down
 ```
 
-Para eliminar también volúmenes Docker nombrados, usar con cuidado:
+Para eliminar también volúmenes Docker nombrados de Compose, usar con cuidado:
 
 ```bash
 docker compose down -v
 ```
+
+Ese comando no borra los directorios bind-mounted del proyecto, como `sqlserver/data/`, `sqlserver/backup/`, `sqlserver/exports/` o `postgis/data/`. Para un reset local completo del laboratorio, borrar esos datos generados explícitamente y volver a preparar permisos:
+
+```bash
+rm -rf sqlserver/data postgis/data sqlserver/backup/*.bak sqlserver/exports/*
+./scripts/prepare_docker_dirs.sh
+./scripts/render_pgadmin_config.sh
+docker compose up -d sqlserver postgis pgadmin geoserver webgis
+```
+
+No usar `docker compose down --rmi` ni `docker system prune` si se quieren conservar las imágenes descargadas.
