@@ -1,9 +1,21 @@
 #!/usr/bin/env bash
+
+# Script de apoyo para clase: concentra las operaciones habituales sobre
+# SQL Server en Docker para no tener que memorizar comandos largos.
+# Cada función cmd_* representa una acción disponible desde la línea de comandos.
+
+# set -euo pipefail hace que el script falle rápido si un comando falla,
+# si se usa una variable no definida o si falla una parte de un pipe.
 set -euo pipefail
 
+# BASE_DIR apunta a la raíz del repositorio aunque el script se ejecute
+# desde otra carpeta. Esto evita depender del directorio actual del usuario.
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
 
+# Si existe .env, exportamos sus variables para reutilizar la configuración
+# centralizada del laboratorio. set -a hace que las variables cargadas queden
+# disponibles para los comandos hijos que ejecuta este script.
 if [ -f "$BASE_DIR/.env" ]; then
   set -a
   # shellcheck disable=SC1091
@@ -11,6 +23,7 @@ if [ -f "$BASE_DIR/.env" ]; then
   set +a
 fi
 
+# Valor por defecto para conectarse como SA cuando .env no define contraseña.
 SA_PASSWORD="${MSSQL_SA_PASSWORD:-CEML_Admin_2026!}"
 
 usage() {
@@ -38,6 +51,7 @@ EOF
 }
 
 compose() {
+  # Wrapper mínimo para usar siempre el docker-compose.yml del repositorio.
   docker compose -f "$COMPOSE_FILE" "$@"
 }
 
@@ -45,10 +59,15 @@ sqlcmd_query() {
   local database="$1"
   local query="$2"
 
+  # Dentro del contenedor puede existir sqlcmd en dos rutas distintas según
+  # la imagen. Detectamos la ruta y agregamos -C si usamos mssql-tools18,
+  # porque esa versión exige confiar explícitamente en el certificado TLS.
   compose exec -T sqlserver /bin/bash -lc "SQLCMD=\$([ -x /opt/mssql-tools18/bin/sqlcmd ] && echo /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools/bin/sqlcmd); SQLCMD_TLS=\$([ \"\$SQLCMD\" = /opt/mssql-tools18/bin/sqlcmd ] && echo -C || echo ''); \"\$SQLCMD\" \$SQLCMD_TLS -S localhost -U SA -P '$SA_PASSWORD' -d '$database' -Q \"$query\" -W -s \$'\t'"
 }
 
 cmd_prepare_backup() {
+  # El archivo recibido no tiene extensión .bak. Lo copiamos a una ubicación
+  # clara para montarlo dentro del contenedor como backup de SQL Server.
   local source_file="$BASE_DIR/sqlserver/20211020"
   local target_dir="$BASE_DIR/sqlserver/backup"
   local target_file="$target_dir/ceml_gis.bak"
@@ -60,6 +79,8 @@ cmd_prepare_backup() {
 
   mkdir -p "$target_dir"
 
+  # Si el backup preparado ya existe y tiene el mismo tamaño, evitamos copiarlo
+  # otra vez. Es una operación idempotente: puede ejecutarse varias veces.
   if [ -f "$target_file" ] && [ "$(stat -c%s "$target_file")" = "$(stat -c%s "$source_file")" ]; then
     echo "✅ Backup ya preparado en: sqlserver/backup/ceml_gis.bak"
     return 0
@@ -73,6 +94,8 @@ wait_ready() {
   local max=40
   local i=1
 
+  # SQL Server tarda en inicializar aunque el contenedor ya esté levantado.
+  # Probamos SELECT 1 varias veces antes de dar por disponible el servicio.
   while [ "$i" -le "$max" ]; do
     if compose exec -T sqlserver /bin/bash -lc "SQLCMD=\$([ -x /opt/mssql-tools18/bin/sqlcmd ] && echo /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools/bin/sqlcmd); SQLCMD_TLS=\$([ \"\$SQLCMD\" = /opt/mssql-tools18/bin/sqlcmd ] && echo -C || echo ''); \"\$SQLCMD\" \$SQLCMD_TLS -S localhost -U SA -P '$SA_PASSWORD' -Q 'SELECT 1' -b -o /dev/null" >/dev/null 2>&1; then
       echo "✅ SQL Server listo."
@@ -87,6 +110,8 @@ wait_ready() {
 }
 
 cmd_up() {
+  # Antes de levantar los contenedores preparamos los directorios bind-mounted.
+  # Esto evita errores cuando Docker recrea carpetas con dueño root.
   "$BASE_DIR/scripts/prepare_docker_dirs.sh"
   compose up -d
   wait_ready
@@ -99,12 +124,17 @@ cmd_down() {
 cmd_info_backup() {
   local backup_path="${1:-/var/opt/mssql/backup/ceml_gis.bak}"
 
+  # RESTORE FILELISTONLY muestra los nombres lógicos internos del backup.
+  # Esos nombres son necesarios para restaurar una base con MOVE.
   compose exec -T sqlserver /bin/bash -lc "SQLCMD=\$([ -x /opt/mssql-tools18/bin/sqlcmd ] && echo /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools/bin/sqlcmd); SQLCMD_TLS=\$([ \"\$SQLCMD\" = /opt/mssql-tools18/bin/sqlcmd ] && echo -C || echo ''); \"\$SQLCMD\" \$SQLCMD_TLS -S localhost -U SA -P '$SA_PASSWORD' -Q \"RESTORE FILELISTONLY FROM DISK = N'$backup_path';\" -W"
 }
 
 detect_logical_names() {
   local backup_path="${1:-/var/opt/mssql/backup/ceml_gis.bak}"
 
+  # Filtramos la salida de RESTORE FILELISTONLY para quedarnos solo con:
+  # D = archivo de datos, L = archivo de log. Así restore-auto no requiere
+  # que el estudiante copie esos nombres manualmente.
   compose exec -T sqlserver /bin/bash -lc "SQLCMD=\$([ -x /opt/mssql-tools18/bin/sqlcmd ] && echo /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools/bin/sqlcmd); SQLCMD_TLS=\$([ \"\$SQLCMD\" = /opt/mssql-tools18/bin/sqlcmd ] && echo -C || echo ''); \"\$SQLCMD\" \$SQLCMD_TLS -S localhost -U SA -P '$SA_PASSWORD' -Q \"RESTORE FILELISTONLY FROM DISK = N'$backup_path';\" -h -1 -W -s \$'\t'" \
     | awk -F'\t' 'NF >= 3 && ($3 == "D" || $3 == "L") { print $1 "\t" $3 }'
 }
@@ -123,6 +153,8 @@ cmd_restore() {
   fi
 
   local sql
+  # MOVE redirige los archivos internos del backup hacia las rutas válidas
+  # dentro del contenedor. REPLACE permite repetir la restauración en clase.
   sql="RESTORE DATABASE [$db_name] FROM DISK = N'$backup_path' WITH MOVE N'$logical_data_name' TO N'/var/opt/mssql/data/${db_name}.mdf', MOVE N'$logical_log_name' TO N'/var/opt/mssql/data/${db_name}_log.ldf', REPLACE, STATS = 10;"
 
   compose exec -T sqlserver /bin/bash -lc "SQLCMD=\$([ -x /opt/mssql-tools18/bin/sqlcmd ] && echo /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools/bin/sqlcmd); SQLCMD_TLS=\$([ \"\$SQLCMD\" = /opt/mssql-tools18/bin/sqlcmd ] && echo -C || echo ''); \"\$SQLCMD\" \$SQLCMD_TLS -S localhost -U SA -P '$SA_PASSWORD' -Q \"$sql\" -b"
@@ -135,6 +167,7 @@ cmd_restore_auto() {
   local logical_data_name=""
   local logical_log_name=""
 
+  # Leemos los nombres lógicos detectados y los separamos por tipo de archivo.
   while IFS=$'\t' read -r logical_name file_type; do
     case "$file_type" in
       D) logical_data_name="$logical_name" ;;
@@ -174,6 +207,8 @@ cmd_export_table() {
   local query="SET NOCOUNT ON; SELECT * FROM [$db_name].[$schema_name].[$table_name];"
   local tmp_csv="${output_csv}.tmp"
 
+  # El volumen sqlserver/exports permite recuperar desde el host los archivos
+  # generados dentro del contenedor.
   mkdir -p "$BASE_DIR/sqlserver/exports"
 
   # Usamos sqlcmd en vez de bcp para que el proceso sea más transparente en clase.
@@ -188,6 +223,8 @@ cmd_export_table() {
 cmd_export_candidates() {
   local db_name="${1:-CEML_GIS}"
 
+  # Este set inicial prioriza tablas útiles para reconocer entidades GIS:
+  # alumbrado, catastro, suministros, transformadores, cables y reclamos.
   echo "📦 Exportando tablas candidatas para análisis GIS..."
   cmd_export_table "$db_name" dbo AP_ALUMBRADO ap_alumbrado.tsv
   cmd_export_table "$db_name" dbo AP_alumbrado_luminarias ap_alumbrado_luminarias.tsv
@@ -208,6 +245,8 @@ main() {
   local cmd="${1:-}"
   shift || true
 
+  # Despachador principal: traduce el primer argumento del script en la
+  # función correspondiente. Si no reconoce el comando, muestra la ayuda.
   case "$cmd" in
     prepare-backup) cmd_prepare_backup "$@" ;;
     up) cmd_up "$@" ;;
