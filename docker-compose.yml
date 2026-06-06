@@ -83,6 +83,30 @@ services:
     depends_on:
       - geoserver
 
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:python-3.12
+    container_name: ceml-jupyter
+    working_dir: /home/jovyan/work
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      POSTGRES_HOST: postgis
+      POSTGRES_PORT: "5432"
+      SQLSERVER_HOST: sqlserver
+      SQLSERVER_PORT: "1433"
+      JUPYTER_TOKEN: "${JUPYTER_TOKEN:-ceml}"
+    ports:
+      - "${JUPYTER_PORT:-8888}:8888"
+    volumes:
+      - ./:/home/jovyan/work
+    command: >
+      bash -lc "python -m pip install --no-cache-dir -r requirements.txt &&
+      start-notebook.py --IdentityProvider.token=\"$${JUPYTER_TOKEN}\" --ServerApp.password=''"
+    depends_on:
+      postgis:
+        condition: service_healthy
+      sqlserver:
+        condition: service_healthy
+
 volumes:
   pgadmin-data:
   geoserver-data:

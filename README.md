@@ -15,9 +15,9 @@ El flujo actual trabaja con un **piloto chico de media tensión de Montecarlo**.
 ## Requisitos
 
 - Docker y Docker Compose.
-- Python 3.12 o compatible.
-- JupyterLab.
-- Un entorno virtual Python recomendado en `.venv/`.
+- Python 3.12 o compatible si se ejecutan notebooks fuera de Docker.
+- JupyterLab si se ejecutan notebooks fuera de Docker.
+- Un entorno virtual Python recomendado en `.venv/` para ejecución local sin Docker.
 
 ## Datos no versionados
 
@@ -115,7 +115,7 @@ El archivo `pgadmin-config/pgpass` se genera desde `pgadmin-config/pgpass.templa
 
 ## Servicios Docker
 
-Levantar SQL Server, PostGIS, pgAdmin, GeoServer y la web GIS:
+Levantar SQL Server, PostGIS, pgAdmin, GeoServer, JupyterLab y la web GIS:
 
 ```bash
 ./scripts/render_pgadmin_config.sh
@@ -128,6 +128,44 @@ docker compose up -d
 Si se usa `./scripts/gis_sqlserver.sh up`, esta preparación se ejecuta automáticamente antes de `docker compose up -d`.
 
 La primera vez que se descarga los componentes necesarios puede demorar varios minutos.
+
+### JupyterLab con Docker Compose
+
+JupyterLab también se puede ejecutar desde Docker Compose, sin instalar dependencias Python en la máquina anfitriona:
+
+```bash
+./scripts/render_pgadmin_config.sh
+./scripts/prepare_docker_dirs.sh
+docker compose up -d jupyter
+```
+
+Abrir:
+
+```text
+http://localhost:8888/lab?token=ceml
+```
+
+Si se cambia `JUPYTER_PORT` en `.env`, usar ese puerto en la URL. Por ejemplo, con `JUPYTER_PORT=8890`, abrir `http://localhost:8890`.
+
+Cuando Jupyter pida token, usar el valor de `JUPYTER_TOKEN` definido en `.env` (`ceml` por defecto).
+
+Dentro de Jupyter, el repositorio está montado en:
+
+```text
+/home/jovyan/work
+```
+
+Las notebooks del laboratorio están en:
+
+```text
+/home/jovyan/work/notebooks/
+```
+
+Importante sobre hosts:
+
+- Desde Jupyter dentro de Docker, PostGIS se alcanza como `postgis:5432` y SQL Server como `sqlserver:1433`.
+- Desde QGIS, pgAdmin en navegador u otras herramientas de la máquina anfitriona, mantener `localhost` y los puertos publicados en `.env`.
+- La notebook 01 ejecuta comandos Docker mediante `scripts/gis_sqlserver.sh`. Si se usa Jupyter dentro de Docker, ejecutar esos comandos desde una terminal de la máquina anfitriona o usar Jupyter local para esa notebook.
 
 Ver estado:
 
@@ -170,6 +208,19 @@ Los valores siguientes son los defaults de `.env.example`. Se pueden cambiar en 
 | Contraseña | `ceml_admin_2026` |
 
 pgAdmin carga automáticamente el servidor **CEML PostGIS** desde `pgadmin-config/servers.json` y usa `pgadmin-config/pgpass` para la contraseña local del laboratorio. Ese `pgpass` es generado e ignorado por git; si se cambian las variables `POSTGRES_*`, ejecutar `./scripts/render_pgadmin_config.sh` antes de iniciar pgAdmin.
+
+### JupyterLab
+
+| Dato | Valor |
+|---|---|
+| URL directa | <http://localhost:8888/lab?token=ceml> (`JUPYTER_PORT`, `8888` por defecto) |
+| Ruta del repo dentro de Jupyter | `/home/jovyan/work` |
+| Ruta de notebooks | `/home/jovyan/work/notebooks/` |
+| Host PostGIS desde Jupyter | `postgis` |
+| Host SQL Server desde Jupyter | `sqlserver` |
+| Token local | `ceml` (`JUPYTER_TOKEN` por defecto) |
+
+El servicio Jupyter instala `requirements.txt` al iniciar el contenedor. El primer arranque puede demorar y requiere conexión a internet para descargar paquetes si la imagen no los tiene. No exponer Jupyter directamente a internet; si se abre desde otra computadora de la red local, cambiar `JUPYTER_TOKEN` en `.env`.
 
 ### QGIS
 
@@ -247,12 +298,13 @@ Ejemplo, si la máquina anfitriona tiene IP `192.168.1.50`:
 | Web GIS | `http://192.168.1.50:8090` con `WEBGIS_PORT=8090` |
 | GeoServer | `http://192.168.1.50:8088/geoserver` con `GEOSERVER_PORT=8088` |
 | pgAdmin | `http://192.168.1.50:8089` con `PGADMIN_PORT=8089` |
+| JupyterLab | `http://192.168.1.50:8888` con `JUPYTER_PORT=8888` |
 | PostGIS para QGIS | host `192.168.1.50`, puerto `5432` con `POSTGRES_PORT=5432`, base `ceml_gis`, usuario `ceml` |
 
 Notas:
 
 - La web usa rutas relativas hacia GeoServer (`/geoserver/...`), por eso funciona mejor accediendo por `http://IP_DEL_HOST:8090` que abriendo GeoServer y la web por hosts distintos.
-- Si no se puede acceder desde otra computadora, revisar firewall del sistema operativo y permitir los puertos configurados en `.env` (`8090`, `8088`, `8089` y, si se usará QGIS remoto, `5432` por defecto).
+- Si no se puede acceder desde otra computadora, revisar firewall del sistema operativo y permitir los puertos configurados en `.env` (`8090`, `8088`, `8089`, `8888` y, si se usará QGIS remoto, `5432` por defecto).
 - No exponer estos servicios directamente a internet con estas contraseñas. Para acceso externo usar VPN, túnel controlado o un proxy con autenticación.
 
 ## Estructura importante
