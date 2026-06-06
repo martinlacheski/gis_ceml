@@ -84,8 +84,12 @@ services:
       - geoserver
 
   jupyter:
-    image: quay.io/jupyter/scipy-notebook:python-3.12
+    build:
+      context: .
+      dockerfile: Dockerfile.jupyter
+    image: gis-ceml-jupyter:latest
     container_name: ceml-jupyter
+    user: root
     working_dir: /home/jovyan/work
     environment:
       JUPYTER_ENABLE_LAB: "yes"
@@ -93,14 +97,16 @@ services:
       POSTGRES_PORT: "5432"
       SQLSERVER_HOST: sqlserver
       SQLSERVER_PORT: "1433"
+      COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-gis_ceml}"
       JUPYTER_TOKEN: "${JUPYTER_TOKEN:-ceml}"
+      GRANT_SUDO: "yes"
     ports:
       - "${JUPYTER_PORT:-8888}:8888"
     volumes:
       - ./:/home/jovyan/work
+      - /var/run/docker.sock:/var/run/docker.sock
     command: >
-      bash -lc "python -m pip install --no-cache-dir -r requirements.txt &&
-      start-notebook.py --IdentityProvider.token=\"$${JUPYTER_TOKEN}\" --ServerApp.password=''"
+      bash /home/jovyan/work/scripts/start_jupyter_lab.sh
     depends_on:
       postgis:
         condition: service_healthy

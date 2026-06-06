@@ -136,6 +136,7 @@ JupyterLab también se puede ejecutar desde Docker Compose, sin instalar depende
 ```bash
 ./scripts/render_pgadmin_config.sh
 ./scripts/prepare_docker_dirs.sh
+docker compose build jupyter
 docker compose up -d jupyter
 ```
 
@@ -165,7 +166,9 @@ Importante sobre hosts:
 
 - Desde Jupyter dentro de Docker, PostGIS se alcanza como `postgis:5432` y SQL Server como `sqlserver:1433`.
 - Desde QGIS, pgAdmin en navegador u otras herramientas de la máquina anfitriona, mantener `localhost` y los puertos publicados en `.env`.
-- La notebook 01 ejecuta comandos Docker mediante `scripts/gis_sqlserver.sh`. Si se usa Jupyter dentro de Docker, ejecutar esos comandos desde una terminal de la máquina anfitriona o usar Jupyter local para esa notebook.
+- `COMPOSE_PROJECT_NAME=gis_ceml` mantiene el mismo nombre de proyecto Docker Compose dentro y fuera de Jupyter. Sin ese valor, Compose podría calcular otro nombre desde `/home/jovyan/work` y no encontrar los contenedores esperados.
+- Jupyter monta el socket Docker del host (`/var/run/docker.sock`) para que las notebooks puedan ejecutar `docker compose` y los scripts del proyecto desde el contenedor.
+- Este acceso al socket Docker da permisos altos sobre Docker en la máquina anfitriona. Usarlo solo en el laboratorio local o en una red de confianza; no exponer Jupyter a internet ni a usuarios no confiables.
 
 Ver estado:
 
@@ -218,9 +221,16 @@ pgAdmin carga automáticamente el servidor **CEML PostGIS** desde `pgadmin-confi
 | Ruta de notebooks | `/home/jovyan/work/notebooks/` |
 | Host PostGIS desde Jupyter | `postgis` |
 | Host SQL Server desde Jupyter | `sqlserver` |
+| Docker desde Jupyter | Disponible mediante `/var/run/docker.sock` del host |
 | Token local | `ceml` (`JUPYTER_TOKEN` por defecto) |
 
-El servicio Jupyter instala `requirements.txt` al iniciar el contenedor. El primer arranque puede demorar y requiere conexión a internet para descargar paquetes si la imagen no los tiene. No exponer Jupyter directamente a internet; si se abre desde otra computadora de la red local, cambiar `JUPYTER_TOKEN` en `.env`.
+La imagen Jupyter del proyecto incluye Docker CLI y Docker Compose v2 para que las notebooks puedan ejecutar comandos Docker contra el host. El servicio instala `requirements.txt` al iniciar el contenedor. El primer build/arranque puede demorar y requiere conexión a internet para descargar paquetes si la imagen no los tiene. No exponer Jupyter directamente a internet; si se abre desde otra computadora de la red local, cambiar `JUPYTER_TOKEN` en `.env`.
+
+Si dentro de una notebook aparece `permission denied` al ejecutar Docker, recrear el contenedor para que vuelva a detectar el grupo del socket Docker:
+
+```bash
+docker compose up -d --force-recreate jupyter
+```
 
 ### QGIS
 

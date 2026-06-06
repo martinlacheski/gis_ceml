@@ -1,0 +1,9 @@
+FROM quay.io/jupyter/scipy-notebook:python-3.12
+
+USER root
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends docker.io docker-compose-v2 \
+    && rm -rf /var/lib/apt/lists/*
+
+USER ${NB_UID}
