@@ -1,0 +1,295 @@
+ 1. Postes cercanos a un punto                                                                               
+                                                                                                             
+ Consulta Espacial: Búsqueda por proximidad ST_DWithin                                                       
+ Función: Buscar postes dentro de un radio determinado.                                                      
+ Consigna: Obtener todos los postes ubicados hasta 500 metros del punto geográfico (-54.73465, -26.66128),   
+ mostrando su identificador, código CAD, cooperativa y distancia.                                            
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       p.id,                                                                                                 
+       p.idcad,                                                                                              
+       p.coop,                                                                                               
+       p.capa_origen,                                                                                        
+       round(                                                                                                
+           ST_Distance(                                                                                      
+               p.geom,                                                                                       
+               ST_Transform(                                                                                 
+                   ST_SetSRID(ST_MakePoint(-54.73465, -26.66128), 4326),                                     
+                   32721                                                                                     
+               )                                                                                             
+           )::numeric,                                                                                       
+           2                                                                                                 
+       ) AS distancia_m                                                                                      
+   FROM gis.mt_postes p                                                                                      
+   WHERE ST_DWithin(                                                                                         
+       p.geom,                                                                                               
+       ST_Transform(                                                                                         
+           ST_SetSRID(ST_MakePoint(-54.73465, -26.66128), 4326),                                             
+           32721                                                                                             
+       ),                                                                                                    
+       500                                                                                                   
+   )                                                                                                         
+   ORDER BY distancia_m;                                                                                     
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Busca postes cuya geometría esté a 500 metros o menos del punto indicado. Como las capas están en SRID      
+ 32721, el punto ingresado en lon/lat se transforma desde 4326 a 32721.                                      
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 2. Seccionadores cercanos a un punto                                                                        
+                                                                                                             
+ Consulta Espacial: Proximidad ST_DWithin                                                                    
+ Función: Buscar seccionadores cercanos a una ubicación.                                                     
+ Consigna: Listar los seccionadores ubicados hasta 1000 metros del punto (-54.73465, -26.66128).             
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       s.id,                                                                                                 
+       s.idcad,                                                                                              
+       s.coop,                                                                                               
+       round(                                                                                                
+           ST_Distance(                                                                                      
+               s.geom,                                                                                       
+               ST_Transform(                                                                                 
+                   ST_SetSRID(ST_MakePoint(-54.73465, -26.66128), 4326),                                     
+                   32721                                                                                     
+               )                                                                                             
+           )::numeric,                                                                                       
+           2                                                                                                 
+       ) AS distancia_m                                                                                      
+   FROM gis.mt_seccionadores s                                                                               
+   WHERE ST_DWithin(                                                                                         
+       s.geom,                                                                                               
+       ST_Transform(                                                                                         
+           ST_SetSRID(ST_MakePoint(-54.73465, -26.66128), 4326),                                             
+           32721                                                                                             
+       ),                                                                                                    
+       1000                                                                                                  
+   )                                                                                                         
+   ORDER BY distancia_m;                                                                                     
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Filtra los seccionadores que caen dentro de un radio de 1000 metros desde el punto dado y calcula la        
+ distancia exacta.                                                                                           
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 3. Cables que atraviesan un área de influencia                                                              
+                                                                                                             
+ Consulta Espacial: Intersección con buffer ST_Intersects + ST_Buffer                                        
+ Función: Buscar cables que pasan cerca de un punto.                                                         
+ Consigna: Obtener los cables que intersectan un área circular de 300 metros alrededor del punto (-54.73465, 
+ -26.66128).                                                                                                 
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       c.id,                                                                                                 
+       c.idcad,                                                                                              
+       c.coop,                                                                                               
+       round(ST_Length(c.geom)::numeric, 2) AS largo_m                                                       
+   FROM gis.mt_cables c                                                                                      
+   WHERE ST_Intersects(                                                                                      
+       c.geom,                                                                                               
+       ST_Buffer(                                                                                            
+           ST_Transform(                                                                                     
+               ST_SetSRID(ST_MakePoint(-54.73465, -26.66128), 4326),                                         
+               32721                                                                                         
+           ),                                                                                                
+           300                                                                                               
+       )                                                                                                     
+   )                                                                                                         
+   ORDER BY largo_m DESC;                                                                                    
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Primero genera un área circular de 300 metros alrededor del punto. Luego devuelve los cables cuya traza     
+ intersecta esa área.                                                                                        
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 4. Cable más cercano a cada seccionador                                                                     
+                                                                                                             
+ Consulta Espacial: Vecino más cercano                                                                       
+ Función: Asociar cada seccionador con el cable más próximo.                                                 
+ Consigna: Para cada seccionador, obtener el cable más cercano y la distancia entre ambos.                   
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       s.id AS id_seccionador,                                                                               
+       s.idcad AS idcad_seccionador,                                                                         
+       c.id AS id_cable,                                                                                     
+       c.idcad AS idcad_cable,                                                                               
+       round(ST_Distance(s.geom, c.geom)::numeric, 2) AS distancia_m                                         
+   FROM gis.mt_seccionadores s                                                                               
+   CROSS JOIN LATERAL (                                                                                      
+       SELECT                                                                                                
+           c.id,                                                                                             
+           c.idcad,                                                                                          
+           c.geom                                                                                            
+       FROM gis.mt_cables c                                                                                  
+       ORDER BY s.geom <-> c.geom                                                                            
+       LIMIT 1                                                                                               
+   ) c                                                                                                       
+   ORDER BY distancia_m;                                                                                     
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Para cada seccionador busca el cable más cercano usando el operador espacial <->, útil para consultas de    
+ vecino más próximo.                                                                                         
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 5. Cantidad de postes cercanos a cada cable                                                                 
+                                                                                                             
+ Consulta Espacial: Relación por cercanía ST_DWithin                                                         
+ Función: Contar postes próximos a cada tramo de cable.                                                      
+ Consigna: Listar los cables y contar cuántos postes se encuentran a menos de 10 metros de cada cable.       
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       c.id,                                                                                                 
+       c.idcad,                                                                                              
+       c.coop,                                                                                               
+       count(p.id) AS postes_cercanos                                                                        
+   FROM gis.mt_cables c                                                                                      
+   JOIN gis.mt_postes p                                                                                      
+       ON ST_DWithin(p.geom, c.geom, 10)                                                                     
+   GROUP BY c.id, c.idcad, c.coop                                                                            
+   ORDER BY postes_cercanos DESC;                                                                            
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Relaciona cables y postes cuando la distancia entre ambos es menor o igual a 10 metros. Sirve para detectar 
+ qué tramos tienen más postes asociados espacialmente.                                                       
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 6. Postes dentro de un rectángulo de trabajo                                                                
+                                                                                                             
+ Consulta Espacial: Contención espacial ST_Within                                                            
+ Función: Filtrar elementos dentro de un área rectangular.                                                   
+ Consigna: Obtener los postes contenidos dentro de una ventana espacial definida en coordenadas UTM          
+ EPSG:32721.                                                                                                 
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       p.id,                                                                                                 
+       p.idcad,                                                                                              
+       p.coop,                                                                                               
+       p.capa_origen                                                                                         
+   FROM gis.mt_postes p                                                                                      
+   WHERE ST_Within(                                                                                          
+       p.geom,                                                                                               
+       ST_MakeEnvelope(720000, 7040000, 725000, 7045000, 32721)                                              
+   );                                                                                                        
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ ST_MakeEnvelope crea un rectángulo espacial. ST_Within verifica qué postes están completamente contenidos   
+ dentro de esa geometría.                                                                                    
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 7. Longitud total de cables por cooperativa                                                                 
+                                                                                                             
+ Consulta Espacial: Medición de geometrías ST_Length                                                         
+ Función: Calcular longitud de red.                                                                          
+ Consigna: Calcular la cantidad de tramos y la longitud total de cables por cooperativa.                     
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       c.coop,                                                                                               
+       count(*) AS cantidad_tramos,                                                                          
+       round(sum(ST_Length(c.geom))::numeric, 2) AS longitud_total_m                                         
+   FROM gis.mt_cables c                                                                                      
+   GROUP BY c.coop                                                                                           
+   ORDER BY longitud_total_m DESC;                                                                           
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Como geom está en SRID 32721, ST_Length devuelve la longitud en metros. La consulta resume la red por       
+ cooperativa.                                                                                                
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 8. Postes dentro del radio operativo de seccionadores                                                       
+                                                                                                             
+ Consulta Espacial: Proximidad entre capas ST_DWithin                                                        
+ Función: Contar postes cercanos a seccionadores.                                                            
+ Consigna: Para cada seccionador, contar cuántos postes hay dentro de un radio de 100 metros.                
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       s.id,                                                                                                 
+       s.idcad,                                                                                              
+       s.coop,                                                                                               
+       count(p.id) AS postes_en_radio                                                                        
+   FROM gis.mt_seccionadores s                                                                               
+   LEFT JOIN gis.mt_postes p                                                                                 
+       ON ST_DWithin(p.geom, s.geom, 100)                                                                    
+   GROUP BY s.id, s.idcad, s.coop                                                                            
+   ORDER BY postes_en_radio DESC;                                                                            
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ Relaciona seccionadores con postes cercanos. El LEFT JOIN permite conservar seccionadores aunque no tengan  
+ postes dentro del radio definido.                                                                           
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 9. Agrupamiento espacial de postes                                                                          
+                                                                                                             
+ Consulta Espacial: Clustering ST_ClusterDBSCAN                                                              
+ Función: Detectar concentraciones de postes.                                                                
+ Consigna: Agrupar postes que estén próximos entre sí, usando una distancia máxima de 80 metros y un mínimo  
+ de 5 postes por grupo.                                                                                      
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       cid AS grupo,                                                                                         
+       count(*) AS cantidad_postes                                                                           
+   FROM (                                                                                                    
+       SELECT                                                                                                
+           p.id,                                                                                             
+           ST_ClusterDBSCAN(                                                                                 
+               p.geom,                                                                                       
+               eps := 80,                                                                                    
+               minpoints := 5                                                                                
+           ) OVER () AS cid                                                                                  
+       FROM gis.mt_postes p                                                                                  
+   ) q                                                                                                       
+   WHERE cid IS NOT NULL                                                                                     
+   GROUP BY cid                                                                                              
+   ORDER BY cantidad_postes DESC;                                                                            
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ ST_ClusterDBSCAN identifica grupos espaciales de postes próximos. eps := 80 define la distancia máxima      
+ entre vecinos y minpoints := 5 exige al menos cinco postes para formar grupo.                               
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────                            
+                                                                                                             
+ 10. Área de operación alrededor de seccionadores                                                            
+                                                                                                             
+ Consulta Espacial: Generación de áreas ST_Buffer                                                            
+ Función: Crear zonas de influencia.                                                                         
+ Consigna: Generar un área de operación de 50 metros alrededor de cada seccionador.                          
+                                                                                                             
+ ```sql                                                                                                      
+   SELECT                                                                                                    
+       s.id,                                                                                                 
+       s.idcad,                                                                                              
+       s.coop,                                                                                               
+       ST_Buffer(s.geom, 50) AS area_operacion                                                               
+   FROM gis.mt_seccionadores s;                                                                              
+ ```                                                                                                         
+                                                                                                             
+ Explicación:                                                                                                
+ ST_Buffer crea una geometría poligonal alrededor de cada seccionador. Como la capa está en 32721, el valor  
+ 50 representa 50 metros.                                                                                    
+                                                                                                             
+ ────────────────────────────────────────────────────────────────────────────────        
