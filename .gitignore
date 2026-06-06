@@ -1,6 +1,9 @@
 # Entorno Python local
 .venv/
 
+# Variables locales del laboratorio
+.env
+
 # Cachés de Python/Jupyter
 __pycache__/
 *.py[cod]
@@ -17,6 +20,7 @@ postgis/data/
 
 # Datos generados por pgAdmin durante las prácticas
 pgadmin/data/
+pgadmin-config/pgpass
 
 # Datos generados por GeoServer durante las prácticas
 geoserver/data/
@@ -39,3 +43,5 @@ backup/raw_exports/
 # Archivos GIS pesados
 *.dxf
 *.geojson
+# Local Pi runtime state
+.atl/

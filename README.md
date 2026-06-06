@@ -1,6 +1,6 @@
-### Bases de Datos Espaciales
-### Tecnicatura Universitaria en Sistemas de Información Geográfica y Teledetección  
-## Universidad Nacional de Misiones  
+# Bases de Datos Espaciales
+## Tecnicatura Universitaria en Sistemas de Información Geográfica y Teledetección  
+### Universidad Nacional de Misiones  
 
 **Docente responsable:** Esp. Lic. Martín Aníbal Lacheski.  
 **Ayudante de Primera:** Mgter. Ing. Yanina Andrea Caffetti.
@@ -10,7 +10,7 @@
 
 Este proyecto contiene un laboratorio para analizar datos GIS recibidos desde SQL Server y archivos CAD/DXF, preparar una migración controlada hacia PostgreSQL/PostGIS y visualizar los datos con pgAdmin/QGIS y una web GIS basada en GeoServer/OpenLayers.
 
-El flujo actual trabaja primero con un **piloto chico de media tensión de Montecarlo**, no con una migración completa de todo el universo GIS.
+El flujo actual trabaja con un **piloto chico de media tensión de Montecarlo**.
 
 ## Requisitos
 
@@ -76,7 +76,7 @@ dxf/Montecarlo_MT.dxf
 
 Si no se tiene el backup original, hay dos alternativas:
 
-1. **Replicar solo desde datos ya exportados**: conseguir una copia de `sqlserver/exports/*.tsv` generada previamente y continuar desde las notebooks 02, 05 y 06.
+1. **Replicar solo desde datos ya exportados**: conseguir una copia de `sqlserver/exports/*.tsv` generada previamente y continuar desde las notebooks **02, 05 y 06**.
 2. **Usar una base PostGIS ya cargada**: conseguir un dump de PostgreSQL/PostGIS del esquema `crudo`, `depuracion`, `gis` y `auditoria`, restaurarlo y continuar desde QGIS/GeoServer/Web GIS.
 
 Sin el backup SQL Server o sin exports/dump derivados, no es posible reconstruir los datos reales del laboratorio; solo se puede levantar la infraestructura vacía.
@@ -95,27 +95,34 @@ Si Jupyter no ve el entorno, registrar el kernel:
 python3 -m ipykernel install --user --name ceml-gis --display-name "CEML GIS"
 ```
 
+## Variables locales del laboratorio
+
+Antes de levantar servicios, crear el archivo local de variables:
+
+```bash
+cp .env.example .env
+```
+
+Editar `.env` para cambiar puertos o credenciales. Docker Compose lo lee automáticamente desde la raíz del proyecto; el notebook 01 lo usa mediante `scripts/gis_sqlserver.sh` y los notebooks 04, 05 y 06 lo cargan directamente cuando se ejecutan desde el árbol del repo. El archivo `.env` es local y está ignorado por git; `.env.example` es la plantilla compartida y versionable.
+
+Después de cambiar `POSTGRES_DB`, `POSTGRES_USER` o `POSTGRES_PASSWORD`, regenerar el archivo local de credenciales de pgAdmin:
+
+```bash
+./scripts/render_pgadmin_config.sh
+```
+
+El archivo `pgadmin-config/pgpass` se genera desde `pgadmin-config/pgpass.template`, queda ignorado por git y usa siempre el host Docker `postgis` con el puerto interno `5432`. No usa `POSTGRES_PORT`, porque ese valor corresponde al puerto publicado para conexiones desde la máquina anfitriona.
+
 ## Servicios Docker
 
 Levantar SQL Server, PostGIS, pgAdmin, GeoServer y la web GIS:
 
 ```bash
+./scripts/render_pgadmin_config.sh
 docker compose up -d
 ```
 
-Levantar solo PostGIS y pgAdmin:
-
-```bash
-docker compose up -d postgis pgadmin
-```
-
-Levantar el stack de visualización web:
-
-```bash
-docker compose up -d postgis geoserver webgis
-```
-
-La primera vez que se descarga GeoServer puede demorar varios minutos.
+La primera vez que se descarga los componentes necesarios puede demorar varios minutos.
 
 Ver estado:
 
@@ -123,14 +130,16 @@ Ver estado:
 docker compose ps
 ```
 
-## Credenciales locales
+## Credenciales locales por defecto
+
+Los valores siguientes son los defaults de `.env.example`. Se pueden cambiar en `.env` sin modificar notebooks ni `docker-compose.yml`.
 
 ### SQL Server
 
 | Dato | Valor |
 |---|---|
 | Host local | `localhost` |
-| Puerto | `1433` |
+| Puerto local | `${SQLSERVER_PORT:-1433}` (`1433` por defecto) |
 | Usuario | `SA` |
 | Contraseña | `CEML_Admin_2026!` |
 | Base esperada | `CEML_GIS` |
@@ -140,7 +149,7 @@ docker compose ps
 | Dato | Valor |
 |---|---|
 | Host local | `localhost` |
-| Puerto local | `5439` |
+| Puerto local | `${POSTGRES_PORT:-5432}` (`5432` por defecto) |
 | Host desde Docker | `postgis` |
 | Puerto desde Docker | `5432` |
 | Base | `ceml_gis` |
@@ -151,11 +160,11 @@ docker compose ps
 
 | Dato | Valor |
 |---|---|
-| URL | <http://localhost:8089> |
+| URL | <http://localhost:8089> (`PGADMIN_PORT`, `8089` por defecto) |
 | Email | `postgis@example.com` |
 | Contraseña | `ceml_admin_2026` |
 
-pgAdmin carga automáticamente el servidor **CEML PostGIS** desde `pgadmin-config/servers.json` y usa `pgadmin-config/pgpass` para la contraseña local del laboratorio.
+pgAdmin carga automáticamente el servidor **CEML PostGIS** desde `pgadmin-config/servers.json` y usa `pgadmin-config/pgpass` para la contraseña local del laboratorio. Ese `pgpass` es generado e ignorado por git; si se cambian las variables `POSTGRES_*`, ejecutar `./scripts/render_pgadmin_config.sh` antes de iniciar pgAdmin.
 
 ### QGIS
 
@@ -165,7 +174,7 @@ Crear una conexión PostgreSQL/PostGIS en QGIS con estos datos:
 |---|---|
 | Tipo de conexión | PostgreSQL/PostGIS |
 | Host | `localhost` |
-| Puerto | `5439` |
+| Puerto | `${POSTGRES_PORT:-5432}` (`5432` por defecto) |
 | Base de datos | `ceml_gis` |
 | Usuario | `ceml` |
 | Contraseña | `ceml_admin_2026` |
@@ -175,8 +184,8 @@ Crear una conexión PostgreSQL/PostGIS en QGIS con estos datos:
 Importante para QGIS Desktop:
 
 - El campo **Servicio** debe quedar vacío. No escribir `PostGIS` ahí.
-- QGIS corre fuera de Docker, por eso debe usar `localhost:5439`.
-- El puerto `5432` solo se usa entre contenedores Docker, por ejemplo pgAdmin o GeoServer conectando al servicio `postgis`.
+- QGIS corre fuera de Docker, por eso debe usar `localhost` y el puerto local publicado por `POSTGRES_PORT` (`5432` por defecto).
+- Los contenedores Docker también usan `5432` internamente, por ejemplo pgAdmin o GeoServer conectando al servicio `postgis`.
 - Si QGIS muestra pestañas de autenticación, usar la pestaña **Básica** y cargar usuario/contraseña:
   - Usuario: `ceml`
   - Contraseña: `ceml_admin_2026`
@@ -203,8 +212,8 @@ QGIS reproyecta las capas al vuelo. Las capas están guardadas en PostGIS con `E
 
 | Dato | Valor |
 |---|---|
-| URL | <http://localhost:8088/geoserver> |
-| URL desde la web local | <http://localhost:8090/geoserver> |
+| URL | <http://localhost:8088/geoserver> (`GEOSERVER_PORT`, `8088` por defecto) |
+| URL desde la web local | <http://localhost:8090/geoserver> (`WEBGIS_PORT`, `8090` por defecto) |
 | Usuario | `admin` |
 | Contraseña | `geoserver` |
 
@@ -215,7 +224,7 @@ El volumen Docker nombrado `geoserver-data` conserva la configuración publicada
 
 | Dato | Valor |
 |---|---|
-| URL | <http://localhost:8090> |
+| URL | <http://localhost:8090> (`WEBGIS_PORT`, `8090` por defecto) |
 | Cliente web | OpenLayers |
 | Servicio GIS esperado | WMS de GeoServer vía proxy nginx `/geoserver` |
 
@@ -224,21 +233,21 @@ El cliente OpenLayers llama a GeoServer con una URL relativa (`/geoserver/...`) 
 
 ## Acceso desde otra computadora en la red local
 
-Los puertos publicados por Docker quedan disponibles en la máquina anfitriona. Desde otra computadora de la misma red, reemplazar `localhost` por la IP de la máquina donde corre Docker.
+Los puertos publicados por Docker quedan disponibles en la máquina anfitriona. Desde otra computadora de la misma red, reemplazar `localhost` por la IP de la máquina donde corre Docker y usar los puertos definidos en `.env`.
 
 Ejemplo, si la máquina anfitriona tiene IP `192.168.1.50`:
 
 | Servicio | URL o conexión desde otra computadora |
 |---|---|
-| Web GIS | `http://192.168.1.50:8090` |
-| GeoServer | `http://192.168.1.50:8088/geoserver` |
-| pgAdmin | `http://192.168.1.50:8089` |
-| PostGIS para QGIS | host `192.168.1.50`, puerto `5439`, base `ceml_gis`, usuario `ceml` |
+| Web GIS | `http://192.168.1.50:8090` con `WEBGIS_PORT=8090` |
+| GeoServer | `http://192.168.1.50:8088/geoserver` con `GEOSERVER_PORT=8088` |
+| pgAdmin | `http://192.168.1.50:8089` con `PGADMIN_PORT=8089` |
+| PostGIS para QGIS | host `192.168.1.50`, puerto `5432` con `POSTGRES_PORT=5432`, base `ceml_gis`, usuario `ceml` |
 
 Notas:
 
 - La web usa rutas relativas hacia GeoServer (`/geoserver/...`), por eso funciona mejor accediendo por `http://IP_DEL_HOST:8090` que abriendo GeoServer y la web por hosts distintos.
-- Si no se puede acceder desde otra computadora, revisar firewall del sistema operativo y permitir los puertos `8090`, `8088`, `8089` y, si se usará QGIS remoto, `5439`.
+- Si no se puede acceder desde otra computadora, revisar firewall del sistema operativo y permitir los puertos configurados en `.env` (`8090`, `8088`, `8089` y, si se usará QGIS remoto, `5432` por defecto).
 - No exponer estos servicios directamente a internet con estas contraseñas. Para acceso externo usar VPN, túnel controlado o un proxy con autenticación.
 
 ## Estructura importante
@@ -363,7 +372,7 @@ Completar la conexión:
 | user | `ceml` |
 | passwd | `ceml_admin_2026` |
 
-Importante: en GeoServer se usa `postgis:5432`, no `localhost:5439`, porque GeoServer corre dentro de Docker y se conecta por la red interna de Compose.
+Importante: en GeoServer se usa `postgis:5432`, no `localhost:5432`, porque GeoServer corre dentro de Docker y se conecta por la red interna de Compose.
 
 Guardar.
 
@@ -491,10 +500,10 @@ Quedan fuera de la primera geometría:
 
 ### PostGIS no conecta
 
-Confirmar que se usa el puerto local correcto:
+Confirmar que se usa el puerto local correcto definido por `POSTGRES_PORT`:
 
 ```text
-localhost:5439
+localhost:5432  # default con POSTGRES_PORT=5432
 ```
 
 Dentro de Docker, pgAdmin debe conectarse a:

@@ -3,6 +3,14 @@ set -euo pipefail
 
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COMPOSE_FILE="$BASE_DIR/docker-compose.yml"
+
+if [ -f "$BASE_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . "$BASE_DIR/.env"
+  set +a
+fi
+
 SA_PASSWORD="${MSSQL_SA_PASSWORD:-CEML_Admin_2026!}"
 
 usage() {
@@ -174,8 +182,7 @@ cmd_export_table() {
   # Usamos tabulador como separador para no romper textos que contienen comas.
   compose exec -T sqlserver /bin/bash -lc "SQLCMD=\$([ -x /opt/mssql-tools18/bin/sqlcmd ] && echo /opt/mssql-tools18/bin/sqlcmd || echo /opt/mssql-tools/bin/sqlcmd); SQLCMD_TLS=\$([ \"\$SQLCMD\" = /opt/mssql-tools18/bin/sqlcmd ] && echo -C || echo ''); \"\$SQLCMD\" \$SQLCMD_TLS -S localhost -U SA -P '$SA_PASSWORD' -d '$db_name' -Q \"$query\" -W -s \$'\t' -o \"/exports/$tmp_csv\""
 
-  awk 'NR == 2 && $0 ~ /^[-\t]+$/ { next } NF { print }' "$BASE_DIR/sqlserver/exports/$tmp_csv" > "$BASE_DIR/sqlserver/exports/$output_csv"
-  rm -f "$BASE_DIR/sqlserver/exports/$tmp_csv"
+  compose exec -T sqlserver /bin/bash -lc "awk 'NR == 2 && \$0 ~ /^[-\t]+$/ { next } NF { print }' \"/exports/$tmp_csv\" > \"/exports/$output_csv\" && rm -f \"/exports/$tmp_csv\""
   echo "✅ Export generado en: sqlserver/exports/$output_csv"
 }
 
