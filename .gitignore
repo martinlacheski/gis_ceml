@@ -43,5 +43,9 @@ backup/raw_exports/
 # Archivos GIS pesados
 *.dxf
 *.geojson
+
+# Contenido local de desarrollo de la materia
+contenido_desarrollo_materia/
+
 # Local Pi runtime state
 .atl/
